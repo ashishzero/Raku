@@ -279,6 +279,9 @@ func migrate(session *discordgo.Session, i *discordgo.InteractionCreate) {
 		if msgs[i].Author.Bot {
 			continue
 		}
+		if len(msgs[i].Content) == 0 && len(msgs[i].Attachments) == 0 {
+			continue
+		}
 		filtered = append(filtered, msgs[i])
 	}
 
@@ -289,7 +292,8 @@ func migrate(session *discordgo.Session, i *discordgo.InteractionCreate) {
 		desc = fmt.Sprintf("Filtering complete. Migrating %+v messages to channel: <#%+v>...", len(filtered), channel.ID)
 		migrateUpdateResponse(session, i.Interaction, desc, 0x11dddd)
 
-		webhook, channelMigrateErr := session.WebhookCreate(channel.ID, "migration-webhook", session.State.User.AvatarURL(""))
+		var webhook *discordgo.Webhook
+		webhook, channelMigrateErr = session.WebhookCreate(channel.ID, "migration-webhook", session.State.User.AvatarURL(""))
 
 		for idx, msg := range filtered {
 			if channelMigrateErr != nil {
@@ -331,7 +335,7 @@ func migrate(session *discordgo.Session, i *discordgo.InteractionCreate) {
 
 			if time.Since(start) > 30*time.Second {
 				start = time.Now()
-				desc = fmt.Sprintf("Migrated %v of %v messages...", idx, len(filtered))
+				desc = fmt.Sprintf("Migrated %v of %v messages...", idx+1, len(filtered))
 				migrateUpdateResponse(session, i.Interaction, desc, 0x11dddd)
 			}
 		}
@@ -384,6 +388,9 @@ func migrate(session *discordgo.Session, i *discordgo.InteractionCreate) {
 				Description: content,
 				Type:        discordgo.EmbedTypeRich,
 				Color:       0x11ff22,
+				Footer: &discordgo.MessageEmbedFooter{
+					Text: fmt.Sprintf("Total %+v messages", len(filtered)),
+				},
 			},
 		},
 		Files: files,
