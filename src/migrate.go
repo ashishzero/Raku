@@ -355,16 +355,16 @@ func migrate(session *discordgo.Session, i *discordgo.InteractionCreate) {
 	content := ""
 
 	if channelMigrateErr == nil && channel != nil {
-		content += fmt.Sprintf(":green_circle: Migration from <#%+v> to <#%+v> complete.", i.ChannelID, channel.ID)
+		content += fmt.Sprintf("\n:green_circle: Migration from <#%+v> to <#%+v> complete.", i.ChannelID, channel.ID)
 	} else if channel != nil {
 		log.Printf("error: migrate: %+v\n", channelMigrateErr)
-		content += fmt.Sprintf(":negative_squared_cross_mark: Migration from <#%+v> to <#%+v> failed.", i.ChannelID, channel.ID)
+		content += fmt.Sprintf("\n:negative_squared_cross_mark: Migration from <#%+v> to <#%+v> failed.", i.ChannelID, channel.ID)
 	}
 
 	if htmlMigrateErr == nil && len(filename) > 0 {
-		content += fmt.Sprintf(":green_circle: Migration from <#%+v> to file %+v complete.", i.ChannelID, filename)
+		content += fmt.Sprintf("\n:green_circle: Migration from <#%+v> to file %+v complete.", i.ChannelID, filename)
 	} else if len(filename) > 0 {
-		content += fmt.Sprintf(":negative_squared_cross_mark: Migration from <#%+v> to file %+v failed.", i.ChannelID, filename)
+		content += fmt.Sprintf("\n:negative_squared_cross_mark: Migration from <#%+v> to file %+v failed.", i.ChannelID, filename)
 	}
 
 	var files = make([]*discordgo.File, 0, 1)
