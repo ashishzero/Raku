@@ -124,7 +124,7 @@ func mediaSearchInteract(session *discordgo.Session, i *discordgo.InteractionCre
 
 	err = session.InteractionRespond(i.Interaction, res)
 	if err != nil {
-		log.Printf("error: %+v\n", err)
+		log.Printf("error: mediaSearchInteract: %+v\n", err)
 	}
 }
 
@@ -152,7 +152,7 @@ func animeSeasonal(session *discordgo.Session, i *discordgo.InteractionCreate) {
 
 	err := session.InteractionRespond(i.Interaction, res)
 	if err != nil {
-		log.Printf("error: %+v\n", err)
+		log.Printf("error: animeSeasonal: %+v\n", err)
 	}
 }
 
@@ -181,7 +181,7 @@ func animeSeasonalInteract(session *discordgo.Session, i *discordgo.InteractionC
 
 	err := session.InteractionRespond(i.Interaction, res)
 	if err != nil {
-		log.Printf("error: %+v\n", err)
+		log.Printf("error: animeSeasonalInteract: %+v\n", err)
 	}
 }
 
@@ -372,7 +372,7 @@ func doMediaSearch(session *discordgo.Session, i *discordgo.InteractionCreate, m
 
 	err = session.InteractionRespond(i.Interaction, res)
 	if err != nil {
-		log.Printf("error: %+v\n", err)
+		log.Printf("error: doMediaSearch: %+v\n", err)
 	}
 }
 
@@ -385,7 +385,7 @@ func doSeasonalAnime(session *discordgo.Session, currentPage int, index int, yea
 	page, err := anilist.FindSeasonal(session.Client, info, season, year)
 
 	if err != nil {
-		log.Printf("err: %+v\n", err)
+		log.Printf("error: doSeasonalAnime: %+v\n", err)
 		return nil
 	}
 
