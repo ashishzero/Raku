@@ -344,7 +344,7 @@ func migrate(session *discordgo.Session, i *discordgo.InteractionCreate) {
 		}
 	}
 
-	if channel != nil && channel.Type != discordgo.ChannelTypeGuildText {
+	if channel != nil && (channel.Type != discordgo.ChannelTypeGuildText && channel.Type != discordgo.ChannelTypeGuildPublicThread) {
 		var res = &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
@@ -436,7 +436,14 @@ func migrate(session *discordgo.Session, i *discordgo.InteractionCreate) {
 		migrateUpdateResponse(session, i.Interaction, desc, 0x11dddd)
 
 		var webhook *discordgo.Webhook
-		webhook, channelMigrateErr = session.WebhookCreate(channel.ID, "migration-webhook", session.State.User.AvatarURL(""))
+
+		parent := channel.ID
+
+		if channel.IsThread() {
+			parent = channel.ParentID
+		}
+
+		webhook, channelMigrateErr = session.WebhookCreate(parent, "migration-webhook", session.State.User.AvatarURL(""))
 
 		for idx, msg := range filtered {
 			if channelMigrateErr != nil {
@@ -474,7 +481,11 @@ func migrate(session *discordgo.Session, i *discordgo.InteractionCreate) {
 				},
 			}
 
-			_, channelMigrateErr = session.WebhookExecute(webhook.ID, webhook.Token, false, param)
+			if channel.IsThread() {
+				_, channelMigrateErr = session.WebhookThreadExecute(webhook.ID, webhook.Token, false, channel.ID, param)
+			} else {
+				_, channelMigrateErr = session.WebhookExecute(webhook.ID, webhook.Token, false, param)
+			}
 
 			if time.Since(start) > 30*time.Second {
 				start = time.Now()
@@ -483,7 +494,9 @@ func migrate(session *discordgo.Session, i *discordgo.InteractionCreate) {
 			}
 		}
 
-		session.WebhookDelete(webhook.ID)
+		if webhook != nil {
+			session.WebhookDelete(webhook.ID)
+		}
 	}
 
 	var fileBuilder strings.Builder
@@ -514,13 +527,13 @@ func migrate(session *discordgo.Session, i *discordgo.InteractionCreate) {
 		content += fmt.Sprintf("\n:green_circle: Migration from <#%+v> to <#%+v> complete.", i.ChannelID, channel.ID)
 	} else if channel != nil {
 		log.Printf("error: migrate: %+v\n", channelMigrateErr)
-		content += fmt.Sprintf("\n:negative_squared_cross_mark: Migration from <#%+v> to <#%+v> failed.", i.ChannelID, channel.ID)
+		content += fmt.Sprintf("\n:question: Migration from <#%+v> to <#%+v> failed: %+v", i.ChannelID, channel.ID, channelMigrateErr.Error())
 	}
 
 	if fileMigrateErr == nil && len(filename) > 0 {
 		content += fmt.Sprintf("\n:green_circle: Migration from <#%+v> to file %+v complete.", i.ChannelID, filename)
 	} else if len(filename) > 0 {
-		content += fmt.Sprintf("\n:negative_squared_cross_mark: Migration from <#%+v> to file %+v failed.", i.ChannelID, filename)
+		content += fmt.Sprintf("\n:question: Migration from <#%+v> to file %+v failed: %+v", i.ChannelID, filename, fileMigrateErr.Error())
 	}
 
 	var files = make([]*discordgo.File, 0, 1)

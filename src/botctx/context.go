@@ -42,6 +42,10 @@ func Login(token string) {
 		commands = append(commands, v.Command)
 	}
 
+	usd := discordgo.UpdateStatusData{}
+
+	bot.UpdateStatusComplex(usd)
+
 	bot.AddHandler(ready)
 	bot.AddHandler(interactionCreate)
 
