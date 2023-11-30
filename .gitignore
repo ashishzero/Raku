@@ -1,4 +1,3 @@
 .vscode/
-*.exe
+src/*.exe
 token
-layouts
