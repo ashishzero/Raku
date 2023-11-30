@@ -8,6 +8,9 @@ import (
 	"time"
 
 	"github.com/bwmarrin/discordgo"
+	"github.com/gomarkdown/markdown"
+	"github.com/gomarkdown/markdown/html"
+	"github.com/gomarkdown/markdown/parser"
 )
 
 var MigrateCommand = botctx.CommandDesc{
@@ -39,104 +42,243 @@ var MigrateCommand = botctx.CommandDesc{
 
 var (
 	exportCSS = `
+	* {
+		margin: 0;
+		font-family: "Roboto", sans-serif;
+		border: 0;
+		font-size: 100%;
+		font-style: inherit;
+		font-weight: inherit;
+		margin: 0;
+		padding: 0;
+		vertical-align: baseline;
+		overflow: hidden;
+		transition: background-color 0.17s ease, color 0.17s ease;
+	}
+	
 	body {
-		margin: 0 auto;
-		max-width: 800px;
-		padding: 0 20px;
-	  }
-	  
-	  .container {
-		border: 2px solid #dedede;
-		background-color: #f1f1f1;
-		border-radius: 5px;
-		padding: 10px;
-		margin: 10px 0;
-	  }
-	  
-	  .darker {
-		border-color: #ccc;
-		background-color: #ddd;
-	  }
-	  
-	  .container::after {
-		content: "";
-		clear: both;
-		display: table;
-	  }
-	  
-	  .container img.left {
-		float: left;
-		max-width: 60px;
-		width: 100%;
-		margin-right: 20px;
-		border-radius: 50%;
-	  }
+		background-color: #36393f;
+		color: #dcddde;
+	}
 
-	  .container img.attached {
-		max-width: 512px;
+	a {
+		color: #00aff4;
+		text-decoration: none
+	}
+
+	a:hover {
+		text-decoration: underline
+	}
+	
+	.screen {
+		width: 75%;
+		margin: 0 auto;
+	}
+	
+	.menu-bar {
+		background-color: #36393f;
+		height: 48px;
+		display: flex;
+		box-shadow: 0 1px 0 rgba(0, 0, 0, 0.2), 0 2px 0 rgba(0, 0, 0, 0.06);
+		padding: 0px 18px;
+		color: rgba(255, 255, 255, 0.95);
+		line-height: 46px;
+		font-size: 18px;
+		font-weight: 600;
+		z-index: 1;
 		width: 100%;
-		margin-right: 20px;
-	  }
-	  
-	  .container img.right {
-		float: right;
-		margin-left: 20px;
-		margin-right:0;
-	  }
-	  
-	  .time-right {
-		float: right;
-		color: #aaa;
-	  }
-	  
-	  .time-left {
-		float: left;
-		color: #999;
-	  }
-	`
+		top: 0;
+	}
+	
+	.menu-bar>.name:before {
+		line-height: 0px;
+		content: "#";
+		margin-right: 6px;
+		font-size: 1.1em;
+		color: rgba(255, 255, 255, 0.5);
+	}
+	
+	.menu-bar>.topic {
+		color: rgba(255, 255, 255, 0.4);
+		font-size: 0.75rem;
+		font-weight: 400;
+		letter-spacing: 0;
+		margin-left: 0.4em;
+		line-height: 48px;
+	}
+	
+	.menu-bar>.topic:before {
+		content: " — ";
+		color: rgba(255, 255, 255, 0.2);
+	}
+	
+	.chat-box {
+		margin: auto;
+		height: calc(100% - 48px);
+		overflow-y: auto;
+		position: fixed;
+		margin-right: 12.5%;
+	}
+	
+	.chat-box::-webkit-scrollbar {
+		width: 14px;
+		position: absolute;
+	}
+	
+	.chat-box::-webkit-scrollbar-thumb,
+	::-webkit-scrollbar-track-piece {
+		background-clip: padding-box;
+		border: 2.5px solid #36393f;
+		border-radius: 7px;
+		background-clip: padding-box;
+	}
+	
+	.chat-box::-webkit-scrollbar-thumb {
+		background-color: #181a1c;
+	}
+	
+	.chat-box::-webkit-scrollbar-track-piece {
+		background-color: rgba(0, 0, 0, 0.25);
+	}
+	
+	.message-group {
+		margin: 10px 20px;
+		padding: 10px 1px;
+	}
+	
+	.header-group>.avatar img {
+		position: absolute;
+		border-radius: 50%;
+		height: 45px;
+		width: 45px;
+	}
+	
+	.header-group>.header {
+		margin-left: 60px;
+		padding-top: 3px;
+		color: #ffffff;
+		height: 1.3em;
+	}
+	
+	.header-group>.header>.timestamp {
+		color: rgba(255, 255, 255, 0.2);
+		font-size: 0.75rem;
+		font-weight: 400;
+		letter-spacing: 0;
+		margin-left: 0.3rem;
+	}
+	
+	.message {
+		color: #dcddde;
+		margin-left: 60px;
+		padding-right: 10px;
+	}
+	
+	.message>.content {
+		margin-top: 4px;
+		font-size: 0.9375rem;
+		color: #dcddde;
+	}
+	
+	.divider {
+		border: none;
+		border-bottom: 1px solid transparent;
+		margin: 20px 0px -20px;
+		border-bottom-color: rgba(255, 255, 255, 0.04);
+		padding: 15px;
+	}
+	
+	.md>bold {
+		font-weight: 700;
+	}
+	
+	.md>underline {
+		text-decoration: underline;
+	}
+	
+	.md>strike {
+		text-decoration: line-through;
+	}
+	
+	.md>italic {
+		font-style: italic;
+	}`
 )
 
-func migrateHtmlBuildMessage(builder *strings.Builder, msg *discordgo.Message) {
-	avatar := fmt.Sprintf("<img src='%+v' alt='Avatar' class='left' style='width:100%%;'>", msg.Author.AvatarURL(""))
-	content := fmt.Sprintf("<p>%+v</p>", msg.Content)
-	timestamp := fmt.Sprintf("<span class='time-right'>%+v</span>", msg.Timestamp.String())
+func mdToHTML(md string) string {
+	extensions := parser.CommonExtensions | parser.AutoHeadingIDs | parser.NoEmptyLineBeforeBlock
+	p := parser.NewWithExtensions(extensions)
+	doc := p.Parse([]byte(md))
 
-	builder.WriteString("<div class='container darker'>")
-	builder.WriteString(avatar)
+	htmlFlags := html.CommonFlags | html.HrefTargetBlank
+	opts := html.RendererOptions{Flags: htmlFlags}
+	renderer := html.NewRenderer(opts)
+
+	res := markdown.Render(doc, renderer)
+	return string(res)
+}
+
+func migrateHtmlBuildMessage(builder *strings.Builder, msg *discordgo.Message) {
+	builder.WriteString("<div class='header-group'>")
+	builder.WriteString("<div class='avatar'>")
+	builder.WriteString(fmt.Sprintf("<img src='%+v?size=128' alt='Avatar-%+v'></img>", msg.Author.AvatarURL(""), msg.Author.Username))
+	builder.WriteString("</div>")
+	builder.WriteString(fmt.Sprintf("<div class='header'>%+v<span class='timestamp'>", msg.Author.Username))
+	builder.WriteString(msg.Timestamp.Format("01-02-2006 15:04:05 Monday"))
+
+	builder.WriteString("</span></div>")
+	builder.WriteString("</div>")
+
+	content := mdToHTML(msg.Content)
+
+	builder.WriteString("<div class='message'>")
+
+	builder.WriteString("<div class='content'>")
 	builder.WriteString(content)
-	builder.WriteString(timestamp)
+	builder.WriteString("</div>")
 
 	for _, attachment := range msg.Attachments {
+		builder.WriteString("<div class='content'>")
 		if strings.HasPrefix(attachment.ContentType, "image") {
-			img := fmt.Sprintf("<img src='%+v' alt='%+v' class='attached'>", attachment.URL, attachment.Filename)
+			img := fmt.Sprintf("<img src='%+v' alt='%+v' class='attached' style='max-width: 256px' >", attachment.URL, attachment.Filename)
 			builder.WriteString(img)
 		} else {
 			link := fmt.Sprintf("<a href='%+v'>%+v</a>", attachment.URL, attachment.Filename)
 			builder.WriteString(link)
 		}
+		builder.WriteString("</div>")
 	}
 
 	builder.WriteString("</div>")
+	builder.WriteString("<hr class='divider' />")
 }
 
-func migrateHtmlBegin(builder *strings.Builder, header string) {
+func migrateHtmlBegin(builder *strings.Builder, channel *discordgo.Channel) {
 	builder.WriteString("<!DOCTYPE html>")
-	builder.WriteString("<html>")
+	builder.WriteString("<html lang='en'>")
 	builder.WriteString("<head>")
+	builder.WriteString("<meta charset='UTF-8'>")
 	builder.WriteString("<meta name='viewport' content='width=device-width, initial-scale=1'>")
+	builder.WriteString(fmt.Sprintf("<title>%+v</title>", channel.Name))
 	builder.WriteString("<style>")
 	builder.WriteString(exportCSS)
 	builder.WriteString("</style>")
 	builder.WriteString("</head>")
+
 	builder.WriteString("<body>")
-	builder.WriteString("<h2>")
-	builder.WriteString(header)
-	builder.WriteString("</h2>")
-	builder.WriteString("\n")
+	builder.WriteString("<div class='screen'>")
+	builder.WriteString("<div class='menu-bar'>")
+	builder.WriteString(fmt.Sprintf("<div class='name'>%+v</div>", channel.Name))
+	builder.WriteString("</div>")
+	builder.WriteString("<div class='chat-box'>")
+	builder.WriteString("<div class='message-group'>")
 }
 
 func migrateHtmlEnd(builder *strings.Builder) {
-	builder.WriteString("\n")
+	builder.WriteString("</div>")
+	builder.WriteString("</div>")
+	builder.WriteString("</div>")
+	builder.WriteString("</div>")
 	builder.WriteString("</body>")
 	builder.WriteString("</html>")
 }
@@ -348,7 +490,7 @@ func migrate(session *discordgo.Session, i *discordgo.InteractionCreate) {
 	if len(filename) > 0 {
 		srcChannel, htmlMigrateErr := session.Channel(i.ChannelID)
 		if htmlMigrateErr == nil {
-			migrateHtmlBegin(&htmlBuilder, srcChannel.Name)
+			migrateHtmlBegin(&htmlBuilder, srcChannel)
 			for _, msg := range filtered {
 				migrateHtmlBuildMessage(&htmlBuilder, msg)
 			}
