@@ -2,6 +2,7 @@ package main
 
 import (
 	"Raku/botctx"
+	"encoding/json"
 	"fmt"
 	"log"
 	"strings"
@@ -338,8 +339,8 @@ func migrate(session *discordgo.Session, i *discordgo.InteractionCreate) {
 	}
 
 	if len(filename) > 0 {
-		if !strings.HasSuffix(filename, ".html") {
-			filename += ".html"
+		if !strings.HasSuffix(filename, ".html") && !strings.HasPrefix(filename, ".json") {
+			filename += ".json"
 		}
 	}
 
@@ -428,7 +429,7 @@ func migrate(session *discordgo.Session, i *discordgo.InteractionCreate) {
 	}
 
 	var channelMigrateErr error = nil
-	var htmlMigrateErr error = nil
+	var fileMigrateErr error = nil
 
 	if channel != nil {
 		desc = fmt.Sprintf("Filtering complete. Migrating %+v messages to channel: <#%+v>...", len(filtered), channel.ID)
@@ -485,16 +486,25 @@ func migrate(session *discordgo.Session, i *discordgo.InteractionCreate) {
 		session.WebhookDelete(webhook.ID)
 	}
 
-	var htmlBuilder strings.Builder
+	var fileBuilder strings.Builder
 
 	if len(filename) > 0 {
-		srcChannel, htmlMigrateErr := session.Channel(i.ChannelID)
-		if htmlMigrateErr == nil {
-			migrateHtmlBegin(&htmlBuilder, srcChannel)
-			for _, msg := range filtered {
-				migrateHtmlBuildMessage(&htmlBuilder, msg)
+		var srcChannel *discordgo.Channel
+		srcChannel, fileMigrateErr = session.Channel(i.ChannelID)
+		if fileMigrateErr == nil {
+			if strings.HasSuffix(filename, ".json") {
+				var jsonBytes []byte
+				jsonBytes, fileMigrateErr = json.Marshal(filtered)
+				if fileMigrateErr == nil {
+					fileBuilder.Write(jsonBytes)
+				}
+			} else {
+				migrateHtmlBegin(&fileBuilder, srcChannel)
+				for _, msg := range filtered {
+					migrateHtmlBuildMessage(&fileBuilder, msg)
+				}
+				migrateHtmlEnd(&fileBuilder)
 			}
-			migrateHtmlEnd(&htmlBuilder)
 		}
 	}
 
@@ -507,7 +517,7 @@ func migrate(session *discordgo.Session, i *discordgo.InteractionCreate) {
 		content += fmt.Sprintf("\n:negative_squared_cross_mark: Migration from <#%+v> to <#%+v> failed.", i.ChannelID, channel.ID)
 	}
 
-	if htmlMigrateErr == nil && len(filename) > 0 {
+	if fileMigrateErr == nil && len(filename) > 0 {
 		content += fmt.Sprintf("\n:green_circle: Migration from <#%+v> to file %+v complete.", i.ChannelID, filename)
 	} else if len(filename) > 0 {
 		content += fmt.Sprintf("\n:negative_squared_cross_mark: Migration from <#%+v> to file %+v failed.", i.ChannelID, filename)
@@ -516,7 +526,7 @@ func migrate(session *discordgo.Session, i *discordgo.InteractionCreate) {
 	var files = make([]*discordgo.File, 0, 1)
 
 	if len(filename) > 1 {
-		reader := strings.NewReader(htmlBuilder.String())
+		reader := strings.NewReader(fileBuilder.String())
 		files = append(files, &discordgo.File{
 			Name:   filename,
 			Reader: reader,
