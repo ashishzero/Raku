@@ -402,7 +402,7 @@ func migrate(session *discordgo.Session, i *discordgo.InteractionCreate) {
 		beforeID = downs[len(downs)-1].ID
 		msgs = append(msgs, downs...)
 
-		if time.Since(start) > 30*time.Second {
+		if time.Since(start) > 700*time.Millisecond {
 			start = time.Now()
 			desc := fmt.Sprintf("Downloading messages (%v)...", len(msgs))
 			if !migrateUpdateResponse(session, i.Interaction, desc, 0x11dddd) {
@@ -418,14 +418,26 @@ func migrate(session *discordgo.Session, i *discordgo.InteractionCreate) {
 
 	filtered := make([]*discordgo.Message, 0, len(msgs))
 
-	for i := len(msgs) - 1; i >= 0; i-- {
-		if msgs[i].Author.Bot {
+	for index := len(msgs) - 1; index >= 0; index-- {
+		if msgs[index].Author.Bot {
 			continue
 		}
-		if len(msgs[i].Content) == 0 && len(msgs[i].Attachments) == 0 {
+		if len(msgs[index].Content) == 0 && len(msgs[index].Attachments) == 0 {
 			continue
 		}
-		filtered = append(filtered, msgs[i])
+		filtered = append(filtered, msgs[index])
+
+		if time.Since(start) > 700*time.Millisecond {
+			start = time.Now()
+			desc := fmt.Sprintf("Filtering messages %v of %v...", index+1, len(msgs))
+			if !migrateUpdateResponse(session, i.Interaction, desc, 0x11dddd) {
+				return
+			}
+		}
+	}
+
+	if !migrateUpdateResponse(session, i.Interaction, "Archiving messages...", 0x11dddd) {
+		return
 	}
 
 	var channelMigrateErr error = nil
@@ -487,7 +499,7 @@ func migrate(session *discordgo.Session, i *discordgo.InteractionCreate) {
 				_, channelMigrateErr = session.WebhookExecute(webhook.ID, webhook.Token, false, param)
 			}
 
-			if time.Since(start) > 30*time.Second {
+			if time.Since(start) > 700*time.Millisecond {
 				start = time.Now()
 				desc = fmt.Sprintf("Migrated %v of %v messages...", idx+1, len(filtered))
 				migrateUpdateResponse(session, i.Interaction, desc, 0x11dddd)
@@ -507,7 +519,7 @@ func migrate(session *discordgo.Session, i *discordgo.InteractionCreate) {
 		if fileMigrateErr == nil {
 			if strings.HasSuffix(filename, ".json") {
 				var jsonBytes []byte
-				jsonBytes, fileMigrateErr = json.Marshal(filtered)
+				jsonBytes, fileMigrateErr = json.MarshalIndent(filtered, "", "\t")
 				if fileMigrateErr == nil {
 					fileBuilder.Write(jsonBytes)
 				}
@@ -527,13 +539,27 @@ func migrate(session *discordgo.Session, i *discordgo.InteractionCreate) {
 		content += fmt.Sprintf("\n:green_circle: Migration from <#%+v> to <#%+v> complete.", i.ChannelID, channel.ID)
 	} else if channel != nil {
 		log.Printf("error: migrate: %+v\n", channelMigrateErr)
-		content += fmt.Sprintf("\n:question: Migration from <#%+v> to <#%+v> failed: %+v", i.ChannelID, channel.ID, channelMigrateErr.Error())
+		if perr, ok := channelMigrateErr.(*discordgo.RESTError); ok {
+			err := make(map[string]interface{})
+			_ = json.Unmarshal(perr.ResponseBody, &err)
+			msg := err["message"]
+			content += fmt.Sprintf("\n:question: Migration from <#%+v> to <#%+v> failed: %+v", i.ChannelID, channel.ID, msg)
+		} else {
+			content += fmt.Sprintf("\n:question: Migration from <#%+v> to <#%+v> failed: %+v", i.ChannelID, channel.ID, channelMigrateErr.Error())
+		}
 	}
 
 	if fileMigrateErr == nil && len(filename) > 0 {
 		content += fmt.Sprintf("\n:green_circle: Migration from <#%+v> to file %+v complete.", i.ChannelID, filename)
 	} else if len(filename) > 0 {
-		content += fmt.Sprintf("\n:question: Migration from <#%+v> to file %+v failed: %+v", i.ChannelID, filename, fileMigrateErr.Error())
+		if perr, ok := channelMigrateErr.(*discordgo.RESTError); ok {
+			err := make(map[string]interface{})
+			_ = json.Unmarshal(perr.ResponseBody, &err)
+			msg := err["message"]
+			content += fmt.Sprintf("\n:question: Migration from <#%+v> to file %+v failed: %+v", i.ChannelID, filename, msg)
+		} else {
+			content += fmt.Sprintf("\n:question: Migration from <#%+v> to file %+v failed: %+v", i.ChannelID, filename, fileMigrateErr.Error())
+		}
 	}
 
 	var files = make([]*discordgo.File, 0, 1)
